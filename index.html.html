@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trợ Lý Rà Soát Cây Trồng - Ver 1</title>
+    
+    <!-- Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Serif:wght@400;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- CORE STYLING --- */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f8fafc; 
+            color: #1e293b; 
+            height: 100vh; 
+            overflow: hidden; 
+            display: flex; 
+            flex-direction: column; 
+        }
+        
+        /* --- GOV BANNER STYLE --- */
+        .gov-banner {
+            background: linear-gradient(135deg, #a71d2a 0%, #720000 100%); /* Đỏ trầm sang trọng */
+            position: relative;
+            box-shadow: 0 4px 20px rgba(167, 29, 42, 0.4);
+            border-bottom: 3px solid #ffd700; 
+            overflow: hidden;
+        }
+
+        /* Canvas cho Sao Rơi */
+        #star-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .banner-content {
+            position: relative;
+            z-index: 10;
+        }
+
+        /* --- TEXT SHINE EFFECT --- */
+        .text-shine {
+            background: linear-gradient(to right, #b45309 0%, #facc15 50%, #b45309 100%);
+            background-size: 200% auto;
+            color: transparent;
+            -webkit-background-clip: text;
+            background-clip: text;
+            animation: shine 3s linear infinite;
+            font-weight: 800;
+        }
+        @keyframes shine {
+            to { background-position: 200% center; }
+        }
+
+        /* --- CONTROL BAR --- */
+        .control-bar {
+            background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            position: relative;
+            z-index: 20;
+        }
+
+        /* --- BUTTONS & UI --- */
+        .btn-gov {
+            background: linear-gradient(to bottom, #1e293b, #0f172a);
+            border: 1px solid #cbd5e1;
+            border-bottom: 3px solid #94a3b8;
+            border-radius: 6px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-gov:hover::after { left: 100%; }
+        .btn-gov::after {
+            content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transition: 0.5s;
+        }
+        .btn-gov:active { transform: translateY(2px); border-bottom-width: 1px; }
+
+        .hover-float { transition: transform 0.3s ease; }
+        .hover-float:hover { transform: translateY(-4px); }
+
+        .glass-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+        }
+        
+        .list-item {
+            padding: 10px 14px; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: all 0.2s;
+            display: flex; justify-content: space-between; align-items: center; border-left: 3px solid transparent;
+        }
+        .list-item:hover { background-color: #fef2f2; padding-left: 18px; border-left-color: #ce1126; }
+        .list-item.active { background-color: #fff1f2; color: #991b1b; font-weight: 700; border-left-color: #ce1126; }
+
+        .std-input {
+            width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px;
+            font-size: 0.9rem; outline: none; transition: border-color 0.2s;
+        }
+        .std-input:focus { background: #fff; border-color: #ce1126; box-shadow: 0 0 0 3px rgba(206, 17, 38, 0.1); }
+
+        .scroller { overflow-y: auto; scrollbar-width: thin; }
+        .scroller::-webkit-scrollbar { width: 6px; }
+        .scroller::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
+
+        /* Tech Spec Text */
+        .tech-font { font-family: 'Roboto Mono', monospace; }
+
+        @media print {
+            body { height: auto; overflow: visible; background: white; }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            table { width: 100%; border-collapse: collapse; font-size: 11pt; }
+            th, td { border: 1px solid #000 !important; padding: 5px; }
+        }
+        .print-only { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. HEADER -->
+    <header class="gov-banner h-40 flex items-center px-8 shrink-0 no-print">
+        <canvas id="star-canvas"></canvas>
+        
+        <div class="banner-content w-full flex items-center justify-between">
+            <div class="flex items-center gap-6">
+                <!-- Icon Logo -->
+                <div class="w-20 h-20 rounded-full bg-[#991b1b] border-2 border-[#ffd700] shadow-[0_0_25px_rgba(255,215,0,0.5)] flex items-center justify-center hover-float group">
+                    <i class="fa-solid fa-seedling text-[#ffd700] text-4xl drop-shadow-md group-hover:scale-110 transition-transform"></i>
+                </div>
+
+                <!-- Text Content -->
+                <div>
+                    <h1 class="font-serif font-black text-3xl md:text-4xl uppercase text-white drop-shadow-lg leading-tight tracking-wide mb-2">
+                        TRỢ LÝ HỖ TRỢ RÀ SOÁT CÂY TRỒNG
+                    </h1>
+                    
+                    <div class="flex items-center gap-4">
+                        <span class="bg-[#ffd700] text-[#720000] text-xs font-bold px-3 py-1 rounded shadow-lg uppercase tracking-wider">
+                            Phiên bản chạy thử Ver 1
+                        </span>
+                        <div class="h-4 w-px bg-white/30"></div>
+                        <p class="text-xs font-light text-white/90 italic">
+                            Hệ thống tính toán & đối soát tự động theo Luật Đất đai 2024
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Professional Product Info (Tech Specs) -->
+            <div class="hidden lg:block text-right">
+                <div class="bg-black/30 backdrop-blur-sm border border-white/10 rounded-lg p-3">
+                    <div class="grid grid-cols-2 gap-x-6 gap-y-1 text-[10px] text-white/70 tech-font text-left">
+                        <span class="text-[#ffd700] uppercase">Core Engine:</span> <span>XLSX.Batch.Processing</span>
+                        <span class="text-[#ffd700] uppercase">Compliance:</span> <span>NĐ88/2024 & QĐ60/ĐN</span>
+                        <span class="text-[#ffd700] uppercase">Security:</span> <span>Client-Side Only</span>
+                        <span class="text-[#ffd700] uppercase">Build:</span> <span>2025.Alpha.1</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 2. CONTROL BAR -->
+    <section class="control-bar no-print">
+        <input type="file" id="csv-upload" class="hidden" multiple accept=".csv,.xlsx,.xls" onchange="DataEngine.loadBatch(this)">
+        
+        <button onclick="document.getElementById('csv-upload').click()" 
+                class="btn-gov group px-8 py-3 flex items-center gap-4 cursor-pointer hover:shadow-xl hover:shadow-yellow-500/20">
+            <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center border border-white/20 group-hover:scale-110 transition-transform">
+                <i class="fa-solid fa-cloud-arrow-up text-[#ffd700] text-xl hover-float"></i>
+            </div>
+            <div class="text-left">
+                <div class="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Nguồn dữ liệu đầu vào</div>
+                <div class="text-lg font-black uppercase tracking-wide text-shine">
+                    NẠP FILE EXCEL (.XLSX)
+                </div>
+            </div>
+        </button>
+
+        <div class="h-10 w-px bg-slate-200"></div>
+
+        <div class="flex items-center gap-4 px-6">
+            <div class="text-right">
+                <div class="text-[10px] text-slate-400 uppercase font-bold">Trạng thái hệ thống</div>
+                <div id="status-text" class="text-sm font-bold text-slate-700">Đang chờ dữ liệu...</div>
+            </div>
+            <div class="text-left pl-4 border-l border-slate-200">
+                <div class="text-[10px] text-slate-400 uppercase font-bold">Dữ liệu đã nạp</div>
+                <div id="row-counter" class="text-2xl font-mono font-black text-shine opacity-50">
+                    0
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. MAIN WORKSPACE -->
+    <div class="flex flex-1 overflow-hidden p-4 gap-4 no-print bg-[#f1f5f9]">
+        
+        <!-- LEFT: TRA CỨU -->
+        <div class="w-7/12 flex flex-col gap-4">
+            <div class="glass-card p-4 flex gap-4 items-center shrink-0 border-l-4 border-l-[#ce1126]">
+                <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-[#ce1126] border border-red-100 hover-float">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </div>
+                <div class="flex-1">
+                    <input type="text" id="search-box" placeholder="NHẬP TÊN CÂY TRỒNG CẦN TRA CỨU..." 
+                           class="w-full text-lg font-bold text-slate-800 outline-none bg-transparent uppercase placeholder-slate-300"
+                           onkeyup="UI.filterNames()" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="flex-1 flex gap-4 overflow-hidden">
+                <div class="w-5/12 glass-card flex flex-col overflow-hidden">
+                    <div class="p-3 border-b bg-slate-50 flex justify-between items-center">
+                        <span class="text-xs font-bold text-slate-600 uppercase">1. Danh Mục</span>
+                        <span class="text-[10px] bg-slate-200 px-2 rounded-full font-bold" id="count-names">0</span>
+                    </div>
+                    <div id="list-names" class="flex-1 scroller bg-white">
+                        <div class="h-full flex flex-col items-center justify-center text-slate-300">
+                            <i class="fa-solid fa-database text-3xl mb-2 hover-float"></i>
+                            <span class="text-xs">Vui lòng nạp File</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="w-7/12 glass-card flex flex-col overflow-hidden relative border-l-4 border-blue-600">
+                    <div class="p-3 border-b bg-slate-50 flex justify-between items-center">
+                        <span class="text-xs font-bold text-slate-600 uppercase">2. Quy Cách & Đơn Giá</span>
+                        <span class="text-[10px] bg-blue-100 text-blue-700 px-2 rounded-full font-bold" id="count-specs">0</span>
+                    </div>
+                    <div id="list-specs" class="flex-1 scroller bg-slate-50/50">
+                        <div class="h-full flex flex-col items-center justify-center text-slate-300">
+                            <i class="fa-regular fa-hand-point-left text-3xl mb-2 hover-float"></i>
+                            <span class="text-xs">Chọn tên bên trái</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: TÍNH TOÁN -->
+        <div class="w-5/12 flex flex-col gap-4">
+            <div class="glass-card p-5 border-t-4 border-t-emerald-600 relative">
+                <h3 class="text-xs font-bold text-emerald-800 uppercase mb-4 border-b pb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-calculator hover-float"></i> Nhập Liệu Tính Toán
+                </h3>
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">Phương pháp</label>
+                        <select id="calc-method" onchange="UI.toggleInputs()" class="std-input text-xs font-bold cursor-pointer">
+                            <option value="qty">Số Lượng Thực Tế</option>
+                            <option value="density">Mật độ x Diện tích</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                         <label class="flex items-center gap-2 w-full bg-white border border-slate-200 rounded px-2 h-[38px] cursor-pointer hover:border-emerald-400 transition">
+                            <input type="checkbox" id="chk-support" class="accent-emerald-600 w-4 h-4">
+                            <span class="text-xs font-bold text-slate-700">Đất sai mục đích (80%)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="box-qty">
+                    <div class="relative">
+                        <input type="number" id="inp-qty" value="1" min="0" class="std-input text-2xl font-black text-emerald-700 text-center h-14 shadow-inner bg-slate-50">
+                        <span class="absolute right-4 top-5 text-[10px] font-bold text-slate-400" id="unit-display">ĐVT</span>
+                    </div>
+                </div>
+                <div id="box-density" class="hidden grid grid-cols-2 gap-3">
+                    <input type="number" id="inp-den" placeholder="Mật độ" class="std-input text-center font-bold h-12">
+                    <input type="number" id="inp-area" placeholder="Diện tích (m2)" class="std-input text-center font-bold h-12">
+                </div>
+
+                <div class="mt-3 flex justify-between items-end bg-slate-50 p-2 rounded border border-slate-100">
+                    <div class="text-[10px] text-slate-500">Đơn giá quy định (QĐ 60)</div>
+                    <div id="lbl-price" class="text-xl font-bold text-red-600 font-mono">0 ₫</div>
+                </div>
+
+                <div id="pot-alert" class="hidden mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded flex gap-2 items-center animate-pulse">
+                    <i class="fa-solid fa-triangle-exclamation text-yellow-600 text-xs"></i>
+                    <span class="text-[10px] text-yellow-800 font-bold">Cảnh báo: Hỗ trợ di dời chậu kiểng tối đa 10tr/hộ (QĐ 66/2025)</span>
+                </div>
+
+                <button onclick="Calculator.add()" class="mt-4 w-full bg-emerald-700 text-white font-bold py-3 rounded shadow-lg hover:bg-emerald-600 transition-all uppercase text-xs tracking-widest flex justify-center items-center gap-2 hover-float">
+                    <i class="fa-solid fa-plus"></i> Thêm Vào Bảng Kê
+                </button>
+            </div>
+
+            <div class="glass-card flex-1 flex flex-col overflow-hidden">
+                <div class="p-3 border-b bg-slate-50 flex justify-between items-center shrink-0">
+                    <input type="text" id="project-name" placeholder="TÊN DỰ ÁN / CHỦ HỘ..." class="bg-transparent text-xs font-bold w-1/2 outline-none uppercase text-slate-700">
+                    <div class="text-right">
+                        <div class="text-[9px] text-slate-400 uppercase">Tổng giá trị</div>
+                        <div id="grand-total" class="text-lg font-bold text-red-600 leading-none">0 ₫</div>
+                    </div>
+                </div>
+                
+                <div class="flex-1 scroller bg-white relative">
+                    <table class="w-full text-left">
+                        <thead class="sticky top-0 bg-slate-100 text-[10px] uppercase text-slate-500 font-bold z-10">
+                            <tr>
+                                <th class="p-2 w-8 text-center">#</th>
+                                <th class="p-2">Hạng Mục</th>
+                                <th class="p-2 text-center">SL</th>
+                                <th class="p-2 text-right">Thành Tiền</th>
+                                <th class="p-2 w-8"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="bill-body" class="text-xs text-slate-700 font-medium"></tbody>
+                    </table>
+                    <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-40">
+                        <i class="fa-solid fa-file-invoice-dollar text-4xl text-slate-300 mb-2"></i>
+                        <span class="text-xs font-medium text-slate-400">Chưa có dữ liệu tính toán</span>
+                    </div>
+                </div>
+
+                <div class="p-3 border-t bg-slate-50 flex gap-2 justify-end">
+                    <button onclick="Calculator.reset()" class="text-red-500 hover:bg-red-50 px-3 py-1 rounded text-xs font-bold transition">Xóa</button>
+                    <button onclick="Exporter.excel()" class="bg-white border border-emerald-500 text-emerald-600 px-3 py-1 rounded text-xs font-bold hover:bg-emerald-50 transition shadow-sm">Excel</button>
+                    <button onclick="window.print()" class="bg-slate-800 text-white px-3 py-1 rounded text-xs font-bold hover:bg-slate-700 transition shadow-sm hover-float"><i class="fa-solid fa-print mr-1"></i> In</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. FOOTER -->
+    <div class="bg-slate-800 text-slate-400 text-[10px] text-center py-1 no-print font-mono uppercase">
+        Hệ thống hỗ trợ nghiệp vụ GPMB | Professional Edition (Alpha)
+    </div>
+
+    <!-- PRINT TEMPLATE -->
+    <div class="print-only p-8 bg-white text-black font-serif text-sm">
+        <div class="flex justify-between items-start mb-4">
+            <div class="text-center w-5/12">
+                <p class="font-bold text-xs uppercase">UBND TỈNH ĐỒNG NAI</p>
+                <p class="font-bold text-xs">HỘI ĐỒNG BỒI THƯỜNG, HT & TĐC</p>
+                <div class="w-16 border-t border-black mx-auto mt-1"></div>
+            </div>
+            <div class="text-center w-5/12">
+                <p class="font-bold text-xs uppercase">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+                <p class="font-bold text-xs underline">Độc lập - Tự do - Hạnh phúc</p>
+            </div>
+        </div>
+
+        <h1 class="text-xl font-bold text-center uppercase mt-6 mb-2">BẢNG TỔNG HỢP KINH PHÍ BỒI THƯỜNG CÂY TRỒNG</h1>
+        <p class="text-center italic text-xs mb-6" id="print-subtitle">...</p>
+
+        <div class="text-xs text-justify mb-4">
+            <p class="font-bold italic underline mb-1">Căn cứ pháp lý:</p>
+            <ul class="list-disc pl-5">
+                <li>Luật Đất đai 31/2024/QH15; NĐ 88/2024/NĐ-CP; NĐ 101, 102, 71, 112/2024/NĐ-CP; NĐ 151/2025/NĐ-CP.</li>
+                <li>QĐ 58, 59, 60/2024/QĐ-UBND và QĐ 30/2025/QĐ-UBND tỉnh Đồng Nai.</li>
+            </ul>
+        </div>
+
+        <table class="w-full border border-black collapse text-xs">
+            <thead>
+                <tr class="bg-gray-100 font-bold">
+                    <th class="border border-black p-1 text-center w-8">STT</th>
+                    <th class="border border-black p-1 text-left">Tên Hạng Mục / Mô Tả</th>
+                    <th class="border border-black p-1 text-center w-12">ĐVT</th>
+                    <th class="border border-black p-1 text-right">Đơn Giá</th>
+                    <th class="border border-black p-1 text-center">SL</th>
+                    <th class="border border-black p-1 text-center">HS</th>
+                    <th class="border border-black p-1 text-right">Thành Tiền</th>
+                </tr>
+            </thead>
+            <tbody id="print-body"></tbody>
+            <tfoot>
+                <tr class="font-bold">
+                    <td colspan="6" class="border border-black p-1 text-right uppercase">Tổng Cộng</td>
+                    <td class="border border-black p-1 text-right" id="print-total">0</td>
+                </tr>
+            </tfoot>
+        </table>
+        
+        <div class="flex justify-between text-center mt-8">
+            <div class="w-1/3"><p class="font-bold text-xs uppercase">Người Lập Bảng</p></div>
+            <div class="w-1/3"><p class="font-bold text-xs uppercase">Xác Nhận Chủ Hộ</p></div>
+            <div class="w-1/3"><p class="font-bold text-xs uppercase">Hội Đồng BT & TĐC</p></div>
+        </div>
+    </div>
+
+    <!-- LOGIC -->
+    <script>
+        // --- 1. TINY METEOR STARS (SAO BĂNG LI TI) ---
+        const initStars = () => {
+            const canvas = document.getElementById('star-canvas');
+            const ctx = canvas.getContext('2d');
+            let width, height, stars = [];
+
+            const resize = () => {
+                width = canvas.width = canvas.parentElement.offsetWidth;
+                height = canvas.height = canvas.parentElement.offsetHeight;
+            };
+            window.addEventListener('resize', resize);
+            resize();
+
+            class Star {
+                constructor() { this.reset(true); }
+                reset(initial = false) {
+                    this.x = Math.random() * width;
+                    this.y = initial ? Math.random() * height : -10;
+                    this.size = Math.random() * 1.5 + 0.5; // Li ti: 0.5px đến 2px
+                    this.speed = Math.random() * 2 + 1; // Rơi nhanh hơn chút
+                    this.opacity = Math.random() * 0.8 + 0.2;
+                }
+                draw() {
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.globalAlpha = this.opacity;
+                    ctx.fillStyle = '#FFD700'; 
+                    ctx.beginPath();
+                    // Vẽ hình tròn nhỏ thay vì sao 5 cánh để tạo cảm giác li ti
+                    ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+                update() {
+                    this.y += this.speed;
+                    if(this.y > height + 10) this.reset();
+                }
+            }
+
+            // Tăng số lượng sao lên 150 để dày đặc hơn
+            for(let i=0; i<150; i++) stars.push(new Star());
+
+            const animate = () => {
+                ctx.clearRect(0, 0, width, height);
+                stars.forEach(s => { s.update(); s.draw(); });
+                requestAnimationFrame(animate);
+            }
+            animate();
+        };
+
+        // --- 2. LOGIC SYSTEM ---
+        const App = {
+            raw: [], grouped: {}, bill: [], current: null,
+            init: function() {
+                initStars();
+                window.onbeforeprint = () => document.getElementById('print-subtitle').innerText = "Dự án: " + (document.getElementById('project-name').value || "...................");
+            }
+        };
+
+        const DataEngine = {
+            loadBatch: function(input) {
+                const files = input.files;
+                if (!files.length) return;
+                
+                document.getElementById('status-text').innerText = "Đang xử lý...";
+                document.getElementById('status-text').classList.add('text-red-600', 'animate-pulse');
+                
+                App.raw = [];
+                let loaded = 0;
+
+                Array.from(files).forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = new Uint8Array(e.target.result);
+                            const workbook = XLSX.read(data, {type: 'array'});
+                            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                            const rows = XLSX.utils.sheet_to_json(sheet, {header: 1});
+                            
+                            const processed = this.processRows(rows, file.name);
+                            App.raw = [...App.raw, ...processed];
+                            
+                            loaded++;
+                            if (loaded === files.length) this.finalize();
+                        } catch (err) {
+                            alert("Lỗi file: " + file.name);
+                            console.error(err);
+                        }
+                    };
+                    reader.readAsArrayBuffer(file);
+                });
+            },
+
+            processRows: function(rows, source) {
+                if (rows.length < 2) return [];
+                let hIdx = -1;
+                for(let i=0; i<Math.min(rows.length, 20); i++) {
+                    const str = (rows[i]||[]).join(' ').toLowerCase();
+                    if(str.includes('tên') && (str.includes('giá') || str.includes('tiền'))) { hIdx = i; break; }
+                }
+                if (hIdx === -1) return [];
+
+                const h = rows[hIdx].map(c => String(c).toLowerCase());
+                const map = {
+                    name: h.findIndex(c => c.includes('tên')),
+                    specs: h.findIndex(c => c.includes('thông số') || c.includes('quy cách') || c.includes('mô tả')),
+                    unit: h.findIndex(c => c.includes('đvt') || c.includes('đơn vị')),
+                    price: h.findIndex(c => c.includes('giá') || c.includes('tiền'))
+                };
+
+                if (map.name < 0 || map.price < 0) return [];
+
+                const data = [];
+                for(let i = hIdx+1; i < rows.length; i++) {
+                    const row = rows[i];
+                    if (!row[map.name]) continue;
+                    let priceVal = 0;
+                    const pRaw = row[map.price];
+                    if (typeof pRaw === 'number') priceVal = pRaw;
+                    else if (typeof pRaw === 'string') priceVal = parseInt(pRaw.replace(/[^0-9]/g, ''));
+
+                    if (!isNaN(priceVal) && priceVal > 0) {
+                        let nameVal = String(row[map.name]).trim();
+                        nameVal = nameVal.charAt(0).toUpperCase() + nameVal.slice(1);
+                        data.push({
+                            id: Math.random().toString(36).substr(2, 9),
+                            name: nameVal,
+                            norm: UI.normalize(nameVal),
+                            specs: map.specs > -1 ? String(row[map.specs]||'').trim() : '(Tiêu chuẩn)',
+                            unit: map.unit > -1 ? String(row[map.unit]||'Cây').trim() : 'Cây',
+                            price: priceVal,
+                            source: source
+                        });
+                    }
+                }
+                return data;
+            },
+
+            finalize: function() {
+                App.grouped = {};
+                App.raw.forEach(item => {
+                    if (!App.grouped[item.name]) App.grouped[item.name] = [];
+                    App.grouped[item.name].push(item);
+                });
+
+                document.getElementById('status-text').innerText = "Sẵn sàng hoạt động";
+                document.getElementById('status-text').className = "text-sm font-bold text-emerald-700";
+                
+                const counterEl = document.getElementById('row-counter');
+                counterEl.classList.remove('opacity-50');
+                
+                let start = 0;
+                const end = App.raw.length;
+                const duration = 1500;
+                const startTime = performance.now();
+
+                const step = (now) => {
+                    const progress = Math.min((now - startTime) / duration, 1);
+                    counterEl.innerText = Math.floor(progress * end).toLocaleString('vi-VN');
+                    if (progress < 1) requestAnimationFrame(step);
+                    else counterEl.innerText = end.toLocaleString('vi-VN');
+                };
+                requestAnimationFrame(step);
+                UI.filterNames();
+                alert(`Đã nạp thành công ${end.toLocaleString()} dòng dữ liệu!`);
+            }
+        };
+
+        const UI = {
+            normalize: (str) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d"),
+
+            filterNames: function() {
+                const q = this.normalize(document.getElementById('search-box').value);
+                const list = document.getElementById('list-names');
+                const names = Object.keys(App.grouped).filter(n => this.normalize(n).includes(q)).sort();
+                document.getElementById('count-names').innerText = names.length;
+                if (names.length === 0) {
+                    list.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs italic">Không tìm thấy dữ liệu</div>`;
+                    return;
+                }
+                list.innerHTML = names.slice(0, 100).map(n => `
+                    <div class="list-item group" onclick="UI.selectMaster('${n.replace(/'/g, "\\'")}', this)">
+                        <div class="flex items-center gap-2">
+                             <i class="fa-solid fa-leaf text-slate-300 text-[10px] group-hover:text-red-500"></i>
+                             <span class="font-bold text-slate-700 text-sm group-hover:text-red-700">${n}</span>
+                        </div>
+                        <span class="text-[9px] bg-slate-100 text-slate-500 px-2 rounded-full border border-slate-200">${App.grouped[n].length} loại</span>
+                    </div>
+                `).join('');
+            },
+
+            selectMaster: function(name, el) {
+                document.querySelectorAll('.list-item').forEach(i => i.classList.remove('active'));
+                el.classList.add('active');
+                const list = document.getElementById('list-specs');
+                const items = App.grouped[name].sort((a,b) => a.price - b.price);
+                document.getElementById('count-specs').innerText = items.length;
+                list.innerHTML = items.map(item => `
+                    <div class="p-3 border-b border-slate-100 cursor-pointer hover:bg-blue-50 transition relative group" onclick="UI.selectSpec('${item.id}', this)">
+                        <div class="flex justify-between items-start">
+                            <div class="w-3/4 pr-2">
+                                <div class="text-xs text-slate-700 font-medium leading-relaxed group-hover:text-blue-700">${item.specs}</div>
+                            </div>
+                            <div class="w-1/4 text-right">
+                                <div class="font-mono font-bold text-emerald-600 text-sm">${item.price.toLocaleString('vi-VN')}</div>
+                                <div class="text-[9px] text-slate-400 uppercase mt-1">${item.unit}</div>
+                            </div>
+                        </div>
+                        <div class="absolute inset-y-0 left-0 w-1 bg-blue-500 scale-y-0 group-hover:scale-y-100 transition-transform"></div>
+                    </div>
+                `).join('');
+                App.current = null;
+            },
+
+            selectSpec: function(id, el) {
+                const all = document.getElementById('list-specs').children;
+                for(let c of all) c.classList.remove('bg-blue-100', 'border-l-4', 'border-blue-500');
+                el.classList.add('bg-blue-100', 'border-l-4', 'border-blue-500');
+                App.current = App.raw.find(i => i.id === id);
+                document.getElementById('lbl-price').innerText = App.current.price.toLocaleString('vi-VN') + " ₫";
+                document.getElementById('unit-display').innerText = App.current.unit.toUpperCase();
+                const isPot = App.current.norm.includes("chau") || App.current.norm.includes("kieng");
+                const potAlert = document.getElementById('pot-alert');
+                if (isPot) potAlert.classList.remove('hidden'); else potAlert.classList.add('hidden');
+                const u = App.current.unit.toLowerCase();
+                if (u.includes('m2') || u.includes('ha')) {
+                    document.getElementById('calc-method').value = 'density';
+                } else {
+                    document.getElementById('calc-method').value = 'qty';
+                }
+                this.toggleInputs();
+            },
+
+            toggleInputs: function() {
+                const m = document.getElementById('calc-method').value;
+                if (m === 'qty') {
+                    document.getElementById('box-qty').classList.remove('hidden');
+                    document.getElementById('box-density').classList.add('hidden');
+                } else {
+                    document.getElementById('box-qty').classList.add('hidden');
+                    document.getElementById('box-density').classList.remove('hidden');
+                }
+            }
+        };
+
+        const Calculator = {
+            add: function() {
+                if (!App.current) return alert("Vui lòng chọn quy cách trước!");
+                let qty = 0;
+                const mode = document.getElementById('calc-method').value;
+                if (mode === 'qty') {
+                    qty = parseFloat(document.getElementById('inp-qty').value);
+                } else {
+                    const d = parseFloat(document.getElementById('inp-den').value);
+                    const a = parseFloat(document.getElementById('inp-area').value);
+                    if (d && a) qty = d * a;
+                }
+                if (!qty || qty <= 0) return alert("Số lượng phải lớn hơn 0!");
+                const u = App.current.unit.toLowerCase();
+                if (!u.includes('m2') && !u.includes('ha')) qty = Math.ceil(qty);
+                else qty = parseFloat(qty.toFixed(2));
+                const isSupport = document.getElementById('chk-support').checked;
+                const factor = isSupport ? 0.8 : 1.0;
+                const rawTotal = App.current.price * qty * factor;
+                const total = Math.round(rawTotal);
+                let note = "";
+                if ((App.current.norm.includes("chau") || App.current.norm.includes("kieng")) && qty > 100) {
+                    note = `<br><span class='text-[9px] text-red-500 italic'>* Lưu ý: Giới hạn hỗ trợ 10tr/hộ (QĐ 66/2025)</span>`;
+                }
+                App.bill.push({ ...App.current, qty, factor, total, note });
+                this.render();
+                document.getElementById('inp-qty').value = 1;
+            },
+
+            render: function() {
+                const tbody = document.getElementById('bill-body');
+                const pbody = document.getElementById('print-body');
+                const empty = document.getElementById('empty-state');
+                let sum = 0;
+                if (App.bill.length === 0) {
+                    tbody.innerHTML = ''; pbody.innerHTML = '';
+                    empty.classList.remove('hidden');
+                    document.getElementById('grand-total').innerText = "0 ₫";
+                    document.getElementById('print-total').innerText = "0 ₫";
+                    return;
+                }
+                empty.classList.add('hidden');
+                const html = App.bill.map((item, i) => {
+                    sum += item.total;
+                    const factorTag = item.factor < 1 ? `<span class="bg-red-100 text-red-700 px-1 rounded border border-red-200 text-[9px] font-bold">80%</span>` : '';
+                    return {
+                        ui: `
+                        <tr class="border-b border-slate-100 hover:bg-yellow-50 transition group">
+                            <td class="p-2 text-center text-slate-400 text-[10px] font-bold">${i+1}</td>
+                            <td class="p-2">
+                                <div class="font-bold text-slate-800 text-xs">${item.name}</div>
+                                <div class="text-[10px] text-slate-500 truncate w-48">${item.specs}</div>
+                                ${item.note} ${factorTag}
+                            </td>
+                            <td class="p-2 text-center font-bold text-slate-600">${item.qty.toLocaleString('vi-VN')}</td>
+                            <td class="p-2 text-right font-mono font-bold text-emerald-700">${item.total.toLocaleString('vi-VN')}</td>
+                            <td class="p-2 text-center"><i onclick="Calculator.remove(${i})" class="fa-solid fa-trash-can text-slate-300 hover:text-red-500 cursor-pointer hover-float"></i></td>
+                        </tr>`,
+                        print: `
+                        <tr>
+                            <td class="border border-black p-1 text-center">${i+1}</td>
+                            <td class="border border-black p-1 text-left">
+                                <strong>${item.name}</strong><br>${item.specs} ${item.note.replace(/<[^>]*>/g, '')}
+                            </td>
+                            <td class="border border-black p-1 text-center">${item.unit}</td>
+                            <td class="border border-black p-1 text-right">${item.price.toLocaleString('vi-VN')}</td>
+                            <td class="border border-black p-1 text-center">${item.qty.toLocaleString('vi-VN')}</td>
+                            <td class="border border-black p-1 text-center">${item.factor}</td>
+                            <td class="border border-black p-1 text-right font-bold">${item.total.toLocaleString('vi-VN')}</td>
+                        </tr>`
+                    };
+                });
+                tbody.innerHTML = html.map(x => x.ui).join('');
+                pbody.innerHTML = html.map(x => x.print).join('');
+                const totalStr = sum.toLocaleString('vi-VN') + " ₫";
+                document.getElementById('grand-total').innerText = totalStr;
+                document.getElementById('print-total').innerText = totalStr;
+            },
+            remove: function(i) {
+                if(confirm("Xóa dòng này?")) { App.bill.splice(i, 1); this.render(); }
+            },
+            reset: function() {
+                if(confirm("Xóa toàn bộ bảng tính?")) { App.bill = []; this.render(); }
+            }
+        };
+
+        const Exporter = {
+            excel: function() {
+                if(App.bill.length === 0) return alert("Chưa có dữ liệu!");
+                const data = [
+                    ["STT", "Tên Hạng Mục", "Quy Cách", "ĐVT", "Đơn Giá", "Số Lượng", "Hệ Số", "Thành Tiền", "Ghi Chú"],
+                    ...App.bill.map((item, i) => [
+                        i+1, item.name, item.specs, item.unit, item.price, item.qty, item.factor, item.total, item.note.replace(/<[^>]*>/g, '')
+                    ]),
+                    ["", "", "", "", "", "TỔNG CỘNG", "", App.bill.reduce((sum, i) => sum + i.total, 0), ""]
+                ];
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "BangTinhChiTiet");
+                XLSX.writeFile(wb, "Bang_Chiet_Tinh_GPMB.xlsx");
+            }
+        };
+
+        window.onload = App.init;
+    </script>
+</body>
+</html>
